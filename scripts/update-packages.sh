@@ -142,6 +142,36 @@ if [ -d "openwrt-passwall-packages" ]; then
 	rm -rf openwrt-passwall-packages
 fi
 
+# 禁用 shadowsocks-rust 以修复 OpenWrt 25.12 编译问题
+echo " "
+echo "=========================================="
+echo "Disabling shadowsocks-rust for compatibility..."
+echo "=========================================="
+# 在 PassWall 配置中禁用 shadowsocks-rust
+if [ -f "./luci-app-passwall/Makefile" ]; then
+	echo "Patching PassWall to disable shadowsocks-rust..."
+	# 查找并禁用所有 shadowsocks-rust 相关选项
+	sed -i '/shadowsocks-rust/{
+		s/default y/default n/
+		s/=y/=n/
+	}' "./luci-app-passwall/Makefile"
+	
+	# 显式注释掉 shadowsocks-rust 配置
+	sed -i 's/^CONFIG_PACKAGE_shadowsocks-rust=y/# CONFIG_PACKAGE_shadowsocks-rust=y # Disabled for OpenWrt 25.12 compatibility/g' "./luci-app-passwall/Makefile"
+	
+	# 查找所有 .config 文件并禁用 shadowsocks-rust
+	find . -name "*.config" -type f | while read config_file; do
+		if grep -q "shadowsocks-rust" "$config_file" 2>/dev/null; then
+			sed -i 's/CONFIG_PACKAGE_shadowsocks-rust=y/# CONFIG_PACKAGE_shadowsocks-rust=y/g' "$config_file"
+			echo "Patched config: $config_file"
+		fi
+	done
+	
+	echo "shadowsocks-rust has been disabled for compatibility"
+else
+	echo "WARNING: luci-app-passwall/Makefile not found, skipping shadowsocks-rust disable"
+fi
+
 # 添加打印服务包
 echo " "
 echo "=========================================="
