@@ -46,6 +46,11 @@ UPDATE_PACKAGE() {
 	elif [[ "$PKG_SPECIAL" == "name" ]]; then
 		# 重命名仓库
 		mv -f $REPO_NAME $PKG_NAME
+	else
+		# 直接复制整个仓库
+		rm -rf ./$REPO_NAME
+		cp -rf ./$REPO_NAME/. ./
+		rm -rf ./$REPO_NAME/
 	fi
 
 	echo "Done: $PKG_NAME"
@@ -143,9 +148,29 @@ echo "=========================================="
 echo "Installing print service packages..."
 echo "=========================================="
 
-# 从 cups-for-openwrt 仓库添加 cups 和 luci-app-cups
-UPDATE_PACKAGE "cups" "TheMMcOfficial/cups-for-openwrt" "master"
-UPDATE_PACKAGE "luci-app-cups" "TheMMcOfficial/cups-for-openwrt" "master"
+# 从 lede-cups 仓库添加 cups 打印服务
+# 这个仓库包含了 cups 服务器源码
+# 删除可能存在的旧 cups 包
+rm -rf ./cups
+rm -rf ./libcups
+rm -rf ./libcupscgi
+rm -rf ./libcupsmime
+rm -rf ./libcupsppdc
+
+# 克隆并复制 cups 包
+git clone --depth=1 --single-branch --branch master "https://github.com/TheMMcOfficial/lede-cups.git" /tmp/lede-cups-temp
+if [ -d "/tmp/lede-cups-temp/cups" ]; then
+	echo "Copying cups package..."
+	# 复制 cups 服务器和相关包
+	for pkg in cups cups-bjnp cups-dymo cups-opfilter; do
+		if [ -d "/tmp/lede-cups-temp/$pkg" ]; then
+			rm -rf "./$pkg"
+			cp -rf "/tmp/lede-cups-temp/$pkg" ./
+			echo "Copied: $pkg"
+		fi
+	done
+fi
+rm -rf /tmp/lede-cups-temp
 
 echo " "
 echo "=========================================="
