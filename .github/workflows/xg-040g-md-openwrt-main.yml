@@ -166,7 +166,8 @@ jobs:
           echo "单独编译 CUPS 软件包以捕获错误..."
           # 尝试编译 CUPS，使用 V=s 打印详细日志
           if find package -name "cups" -type d | grep -q "cups"; then
-            make package/network/services/cups/compile V=s -j1 || {
+            # 使用正确的编译路径（lede-cups 仓库中的路径）
+            make package/lede-cups/cups/compile V=s -j1 || {
               echo "CUPS 编译失败!"
               exit 1
             }
