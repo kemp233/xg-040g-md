@@ -151,15 +151,14 @@ jobs:
         working-directory: ./openwrt
         run: |
           echo "===== CUPS LuCI COMPATIBILITY FIX ====="
-          echo "尝试安装兼容的 luci-app-cups (旧版命名 luci-app-cupsd):"
-          # 对于 openwrt-25.12 分支，尝试安装 luci-app-cupsd 而不是 luci-app-cups
-          ./scripts/feeds install luci-app-cupsd 2>/dev/null || echo "luci-app-cupsd 不可用，尝试其他方案"
-          # 如果包名已变更，尝试安装 luci-app-cups
-          ./scripts/feeds install luci-app-cups 2>/dev/null || echo "luci-app-cups 也不可用"
-          echo "手动检查 CUPS 包:"
-          find . -name "*cups*" -type d 2>/dev/null | head -10
-          echo "检查 CUPS 安装状态:"
-          ls -la package/cups* 2>/dev/null || echo "没有找到 cups 包目录"
+          echo "检查 feeds 更新状态:"
+          ./scripts/feeds update -a
+          echo "尝试安装 luci-app-cupsd (openwrt-25.12 兼容版本):"
+          ./scripts/feeds install luci-app-cupsd || echo "luci-app-cupsd 安装失败"
+          echo "如果 luci-app-cupsd 不可用，尝试 luci-app-cups:"
+          ./scripts/feeds install luci-app-cups || echo "luci-app-cups 也安装失败"
+          echo "检查已安装的 CUPS 相关包:"
+          ./scripts/feeds list | grep -i "cups" | head -20
           echo "===== COMPATIBILITY FIX END ====="
           
       - name: Hotfix rust llvm CI option

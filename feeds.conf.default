@@ -1,5 +1,2 @@
 src-git packages https://github.com/openwrt/packages.git;master
 src-git luci https://github.com/openwrt/luci.git;master
-
-# 添加兼容的 CUPS LuCI 插件（针对旧版 Lua 架构）
-src-git oldluci https://github.com/openwrt/luci.git;openwrt-22.03
