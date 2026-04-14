@@ -137,6 +137,8 @@ jobs:
           ./scripts/feeds list | grep -i "luci.*cupsd" || echo "未找到 luci-app-cupsd"
           echo "检查所有 luCI 应用包:"
           ./scripts/feeds list | grep -i "luci-app" | head -20
+          echo "检查 CUPS 依赖包:"
+          ./scripts/feeds list | grep -i "libcups\|cups-filters\|ghostscript\|pstoraster\|foomatic" || echo "未找到 CUPS 依赖包"
           echo "===== CUPS FEED DEBUG END ====="
 
       - name: Install third-party packages (homeproxy, passwall)
@@ -154,6 +156,10 @@ jobs:
           ./scripts/feeds install luci-app-cupsd 2>/dev/null || echo "luci-app-cupsd 不可用，尝试其他方案"
           # 如果包名已变更，尝试安装 luci-app-cups
           ./scripts/feeds install luci-app-cups 2>/dev/null || echo "luci-app-cups 也不可用"
+          echo "手动检查 CUPS 包:"
+          find . -name "*cups*" -type d 2>/dev/null | head -10
+          echo "检查 CUPS 安装状态:"
+          ls -la package/cups* 2>/dev/null || echo "没有找到 cups 包目录"
           echo "===== COMPATIBILITY FIX END ====="
           
       - name: Hotfix rust llvm CI option
