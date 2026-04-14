@@ -46,11 +46,6 @@ UPDATE_PACKAGE() {
 	elif [[ "$PKG_SPECIAL" == "name" ]]; then
 		# 重命名仓库
 		mv -f $REPO_NAME $PKG_NAME
-	else
-		# 直接复制整个仓库
-		rm -rf ./$REPO_NAME
-		cp -rf ./$REPO_NAME/. ./
-		rm -rf ./$REPO_NAME/
 	fi
 
 	echo "Done: $PKG_NAME"
@@ -142,36 +137,6 @@ if [ -d "openwrt-passwall-packages" ]; then
 	rm -rf openwrt-passwall-packages
 fi
 
-# 禁用 shadowsocks-rust 以修复 OpenWrt 25.12 编译问题
-echo " "
-echo "=========================================="
-echo "Disabling shadowsocks-rust for compatibility..."
-echo "=========================================="
-# 在 PassWall 配置中禁用 shadowsocks-rust
-if [ -f "./luci-app-passwall/Makefile" ]; then
-	echo "Patching PassWall to disable shadowsocks-rust..."
-	# 查找并禁用所有 shadowsocks-rust 相关选项
-	sed -i '/shadowsocks-rust/{
-		s/default y/default n/
-		s/=y/=n/
-	}' "./luci-app-passwall/Makefile"
-	
-	# 显式注释掉 shadowsocks-rust 配置
-	sed -i 's/^CONFIG_PACKAGE_shadowsocks-rust=y/# CONFIG_PACKAGE_shadowsocks-rust=y # Disabled for OpenWrt 25.12 compatibility/g' "./luci-app-passwall/Makefile"
-	
-	# 查找所有 .config 文件并禁用 shadowsocks-rust
-	find . -name "*.config" -type f | while read config_file; do
-		if grep -q "shadowsocks-rust" "$config_file" 2>/dev/null; then
-			sed -i 's/CONFIG_PACKAGE_shadowsocks-rust=y/# CONFIG_PACKAGE_shadowsocks-rust=y/g' "$config_file"
-			echo "Patched config: $config_file"
-		fi
-	done
-	
-	echo "shadowsocks-rust has been disabled for compatibility"
-else
-	echo "WARNING: luci-app-passwall/Makefile not found, skipping shadowsocks-rust disable"
-fi
-
 # 添加打印服务包
 echo " "
 echo "=========================================="
@@ -179,28 +144,9 @@ echo "Installing print service packages..."
 echo "=========================================="
 
 # 从 lede-cups 仓库添加 cups 打印服务
-# 这个仓库包含了 cups 服务器源码
-# 删除可能存在的旧 cups 包
-rm -rf ./cups
-rm -rf ./libcups
-rm -rf ./libcupscgi
-rm -rf ./libcupsmime
-rm -rf ./libcupsppdc
-
-# 克隆并复制 cups 包
-git clone --depth=1 --single-branch --branch master "https://github.com/TheMMcOfficial/lede-cups.git" /tmp/lede-cups-temp
-if [ -d "/tmp/lede-cups-temp/cups" ]; then
-	echo "Copying cups package..."
-	# 复制 cups 服务器和相关包
-	for pkg in cups cups-bjnp cups-dymo cups-opfilter; do
-		if [ -d "/tmp/lede-cups-temp/$pkg" ]; then
-			rm -rf "./$pkg"
-			cp -rf "/tmp/lede-cups-temp/$pkg" ./
-			echo "Copied: $pkg"
-		fi
-	done
-fi
-rm -rf /tmp/lede-cups-temp
+# 这个仓库包含了 cups 2.3.0 服务器源码
+# 使用正确的仓库来获取源码包
+UPDATE_PACKAGE "lede-cups" "TheMMcOfficial/lede-cups" "master"
 
 echo " "
 echo "=========================================="
