@@ -133,6 +133,10 @@ jobs:
           ./scripts/feeds list | grep -i "cups\|lpq\|lpr" || echo "未找到 CUPS 相关包"
           echo "检查 luci-app-cups 包:"
           ./scripts/feeds list | grep -i "luci.*cups" || echo "未找到 luci-app-cups"
+          echo "检查 luci-app-cupsd 包 (旧版命名):"
+          ./scripts/feeds list | grep -i "luci.*cupsd" || echo "未找到 luci-app-cupsd"
+          echo "检查所有 luCI 应用包:"
+          ./scripts/feeds list | grep -i "luci-app" | head -20
           echo "===== CUPS FEED DEBUG END ====="
 
       - name: Install third-party packages (homeproxy, passwall)
@@ -140,6 +144,17 @@ jobs:
         run: |
           chmod +x $GITHUB_WORKSPACE/scripts/update-packages.sh
           bash $GITHUB_WORKSPACE/scripts/update-packages.sh
+          
+      - name: Fix CUPS LuCI Compatibility
+        working-directory: ./openwrt
+        run: |
+          echo "===== CUPS LuCI COMPATIBILITY FIX ====="
+          echo "尝试安装兼容的 luci-app-cups (旧版命名 luci-app-cupsd):"
+          # 对于 openwrt-25.12 分支，尝试安装 luci-app-cupsd 而不是 luci-app-cups
+          ./scripts/feeds install luci-app-cupsd 2>/dev/null || echo "luci-app-cupsd 不可用，尝试其他方案"
+          # 如果包名已变更，尝试安装 luci-app-cups
+          ./scripts/feeds install luci-app-cups 2>/dev/null || echo "luci-app-cups 也不可用"
+          echo "===== COMPATIBILITY FIX END ====="
           
       - name: Hotfix rust llvm CI option
         working-directory: ./openwrt
