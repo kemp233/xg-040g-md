@@ -136,9 +136,27 @@ jobs:
         working-directory: ./openwrt
         run: |
           echo "===== CUPS FEED DEBUG START ====="
-          echo "检查 CUPS 是否在已安装的 feeds 中:"
-          ./scripts/feeds list | grep -i cups || echo "CUPS 未在 feeds 中找到"
+          echo "检查 CUPS 核心包:"
+          ./scripts/feeds list | grep -i "^cups$" || echo "❌ CUPS 核心包未找到"
+          echo "检查 LuCI CUPS 管理界面:"
+          ./scripts/feeds list | grep -i "luci.*cups" || echo "⚠️  luci-app-cups 未找到"
+          echo "检查 CUPS 依赖包:"
+          ./scripts/feeds list | grep -iE "(libcups|cups-filters|ghostscript)" || echo "⚠️  CUPS 依赖包不完整"
+          echo "检查所有可用的 LuCI 应用:"
+          ./scripts/feeds list | grep -i "luci-app" | head -30
           echo "===== CUPS FEED DEBUG END ====="
+
+      - name: Explicitly Install CUPS and LuCI Packages
+        working-directory: ./openwrt
+        run: |
+          echo "===== EXPLICIT CUPS INSTALLATION ====="
+          echo "强制安装 CUPS 核心包:"
+          ./scripts/feeds install cups libcups cups-filters || echo "部分 CUPS 包安装失败"
+          echo "尝试安装 luci-app-cups (新版本):"
+          ./scripts/feeds install luci-app-cups || echo "luci-app-cups 安装失败，尝试其他方法"
+          echo "检查已安装的包:"
+          ./scripts/feeds list | grep -E "^(cups|libcups|cups-filters|luci-app-cups)" | sort
+          echo "===== EXPLICIT INSTALLATION END ====="
 
       - name: Copy configuration and defconfig
         run: |
@@ -146,15 +164,44 @@ jobs:
           cd openwrt && make defconfig
           [ -e .config ] && cp .config defconfig-final.config
 
+      - name: Fix CUPS Configuration for Main Branch
+        working-directory: ./openwrt
+        run: |
+          echo "===== CUPS CONFIG FIX START ====="
+          echo "确保 CUPS 核心包被选中:"
+          echo "CONFIG_PACKAGE_cups=y" >> .config
+          echo "CONFIG_PACKAGE_libcups=y" >> .config
+          echo "CONFIG_PACKAGE_cups-filters=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-usb-printer=y" >> .config
+          
+          echo "确保 LuCI 核心包被选中:"
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
+          echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
+          
+          echo "尝试选择 luci-app-cups (main 分支标准包名):"
+          echo "CONFIG_PACKAGE_luci-app-cups=y" >> .config
+          
+          echo "重新运行 defconfig 以应用更改:"
+          make defconfig V=s
+          
+          echo "验证最终配置:"
+          grep -E "CONFIG_PACKAGE_(cups|libcups|luci|luci-app-cups)" .config | sort
+          echo "===== CUPS CONFIG FIX END ====="
+
       - name: Debug CUPS Config Status
         working-directory: ./openwrt
         run: |
           echo "===== CUPS CONFIG DEBUG START ====="
           echo "检查 .config 中 CUPS 的最终状态:"
-          grep "CONFIG_PACKAGE_cups" .config || echo "CUPS 未被选中"
-          grep "CONFIG_PACKAGE_luci-app-cups" .config || echo "LuCI-CUPS 未被选中"
+          grep "CONFIG_PACKAGE_cups" .config || echo "❌ CUPS 未被选中"
+          grep "CONFIG_PACKAGE_libcups" .config || echo "❌ libcups 未被选中"
+          grep "CONFIG_PACKAGE_luci-app-cups" .config || echo "⚠️  luci-app-cups 未被选中"
           echo "检查关键依赖状态:"
-          grep "CONFIG_PACKAGE_libusb-1.0" .config || echo "libusb 未选中"
+          grep "CONFIG_PACKAGE_libusb-1.0" .config || echo "⚠️  libusb 未选中"
+          grep "CONFIG_PACKAGE_kmod-usb-printer" .config || echo "⚠️  kmod-usb-printer 未选中"
+          echo "检查 LuCI 状态:"
+          grep "CONFIG_PACKAGE_luci=" .config || echo "❌ LuCI 未被选中"
           echo "===== CUPS CONFIG DEBUG END ====="
 
       - name: Upload build config files
