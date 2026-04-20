@@ -160,6 +160,10 @@ echo "=========================================="
 # 使用正确的仓库来获取源码包
 UPDATE_PACKAGE "lede-cups" "TheMMcOfficial/lede-cups" "master"
 
+# OpenClash 代理软件
+UPDATE_PACKAGE "openclash" "vernesong/OpenClash" "master"
+UPDATE_PACKAGE "luci-app-openclash" "vernesong/OpenClash" "master"
+
 echo " "
 echo "=========================================="
 echo "Package updates completed!"
