@@ -189,6 +189,8 @@ jobs:
           ./scripts/feeds install libcap libev libmbedtls libpcre libyaml libruby || echo "⚠️  部分 OpenClash 依赖包安装失败"
           echo "检查已安装的 OpenClash 相关包:"
           ./scripts/feeds list | grep -E "^(openclash|luci-app-openclash|luci-i18n-openclash)" | sort
+          echo "检查 OpenClash 依赖包:"
+          ./scripts/feeds list | grep -E "^(libcap|libev|libmbedtls|libpcre|libyaml|libruby)" | sort
           echo "===== EXPLICIT OPENCLASH INSTALLATION END ====="
 
       - name: Copy configuration and defconfig

@@ -163,6 +163,7 @@ UPDATE_PACKAGE "lede-cups" "TheMMcOfficial/lede-cups" "master"
 # OpenClash 代理软件
 UPDATE_PACKAGE "openclash" "vernesong/OpenClash" "master"
 UPDATE_PACKAGE "luci-app-openclash" "vernesong/OpenClash" "master"
+UPDATE_PACKAGE "luci-i18n-openclash-zh-cn" "vernesong/OpenClash" "master"
 
 echo " "
 echo "=========================================="
