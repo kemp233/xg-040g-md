@@ -16,6 +16,7 @@ OpenWrt firmware for NOKIA BELL XG-040G-MD
 - **网络与安全**: 防火墙 (基于 nftables), dnsmasq (DHCP/DNS/IPv6)
 - **科学上网**: HomeProxy, PassWall (含 xray-core)
 - **文件服务**: WebDAV 服务器 (基于 lighttpd)
+- **硬盘管理**: USB 硬盘睡眠管理 (hdparm, sdparm, hd-idle)
 
 ## 刷机教程
 
@@ -38,3 +39,5 @@ OpenWrt firmware for NOKIA BELL XG-040G-MD
 ## Docs
 
 - `docs/npu-firmware-load.md`: NPU 固件加载报错（`-2`）分析与修复记录
+- `docs/webdav-setup.md`: WebDAV 服务器配置指南
+- `docs/usb-disk-sleep.md`: USB 硬盘睡眠管理配置指南
