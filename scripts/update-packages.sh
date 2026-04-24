@@ -171,13 +171,6 @@ echo "=========================================="
 echo "Installing local packages..."
 echo "=========================================="
 
-# Install usbutils package
-if [ -d "/root/.openclaw/workspace/xg-040g-md/packages/usbutils" ]; then
-    echo "Installing usbutils package..."
-    rm -rf ./usbutils
-    cp -rf /root/.openclaw/workspace/xg-040g-md/packages/usbutils ./
-fi
-
 # Install luci-app-alist package
 if [ -d "/root/.openclaw/workspace/xg-040g-md/packages/luci-app-alist" ]; then
     echo "Installing luci-app-alist package..."
