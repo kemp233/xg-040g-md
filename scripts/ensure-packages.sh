@@ -1,8 +1,6 @@
 #!/bin/bash
 set -e
 
-cd openwrt
-
 echo "=== Ensuring Required Packages ==="
 
 # 检查关键包是否存在
