@@ -53,8 +53,14 @@ optimize_ccache() {
 cleanup_build_area() {
     echo "🧹 Cleaning up build area..."
 
-    # Remove temporary files
-    rm -rf /tmp/* /var/tmp/*
+    # Remove temporary files (only user-created files, avoid system protected files)
+    # Use find with proper permissions instead of rm -rf on entire /tmp
+    find /tmp -type f -atime +7 -delete 2>/dev/null || true
+    find /var/tmp -type f -atime +7 -delete 2>/dev/null || true
+    
+    # Remove empty directories (but not system directories)
+    find /tmp -type d -empty -delete 2>/dev/null || true
+    find /var/tmp -type d -empty -delete 2>/dev/null || true
 
     # Clean package caches
     rm -rf /var/lib/apt/lists/*
