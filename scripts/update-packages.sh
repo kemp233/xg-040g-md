@@ -157,13 +157,72 @@ echo "=========================================="
 
 # 从 lede-cups 仓库添加 cups 打印服务
 # 这个仓库包含了 cups 2.3.0 服务器源码
-# 使用正确的仓库来获取源码包
-UPDATE_PACKAGE "lede-cups" "TheMMcOfficial/lede-cups" "master"
+# Remove existing CUPS directories to prevent conflicts
+echo "Removing existing CUPS directories from feeds..."
+rm -rf ../feeds/packages/print/cups
+rm -rf ../feeds/packages/print/libcups
+rm -rf ../feeds/packages/print/cups-filters
+rm -rf ../package/feeds_packages/cups
+rm -rf ../package/feeds_packages/libcups
 
-# OpenClash 代理软件
-UPDATE_PACKAGE "openclash" "vernesong/OpenClash" "master"
-UPDATE_PACKAGE "luci-app-openclash" "vernesong/OpenClash" "master"
-UPDATE_PACKAGE "luci-i18n-openclash-zh-cn" "vernesong/OpenClash" "master"
+echo "Installing CUPS packages..."
+# Try different repository approaches for better compatibility
+if ! UPDATE_PACKAGE "lede-cups" "TheMMcOfficial/lede-cups" "master"; then
+    echo "⚠️  lede-cups installation failed, trying alternative approach..."
+
+    # Alternative: install from openwrt/packages if available
+    git clone --depth=1 --single-branch --branch "master" "https://github.com/openwrt/packages.git" "packages-temp"
+    if [ -d "packages-temp/print/cups" ]; then
+        cp -rf packages-temp/print/cups ./
+        cp -rf packages-temp/print/libcups ./
+        echo "✅ Installed CUPS from openwrt/packages"
+    fi
+    rm -rf packages-temp
+fi
+
+# OpenClash 代理软件 - Fixed directory conflict by removing existing directories first
+echo " "
+echo "=========================================="
+echo "Installing OpenClash packages (with conflict resolution)..."
+echo "=========================================="
+
+# First, remove any existing OpenClash directories from feeds to prevent conflicts
+echo "Removing existing OpenClash directories from feeds..."
+rm -rf ../feeds/luci/applications/luci-app-openclash
+rm -rf ../feeds/packages/net/openclash
+rm -rf ../package/feeds_packages/openclash
+rm -rf ../package/feeds_packages/luci-app-openclash
+
+# Clone OpenClash repository once
+echo "Cloning OpenClash repository..."
+git clone --depth=1 --single-branch --branch "master" "https://github.com/vernesong/OpenClash.git" "OpenClash-temp"
+
+# Copy individual packages to avoid directory conflicts
+if [ -d "OpenClash-temp" ]; then
+    # Copy openclash core package
+    if [ -d "OpenClash-temp/openclash" ]; then
+        cp -rf OpenClash-temp/openclash ./
+        echo "✅ Installed openclash core package"
+    fi
+
+    # Copy luci-app-openclash package
+    if [ -d "OpenClash-temp/luci-app-openclash" ]; then
+        cp -rf OpenClash-temp/luci-app-openclash ./
+        echo "✅ Installed luci-app-openclash package"
+    fi
+
+    # Copy language package if exists
+    if [ -d "OpenClash-temp/luci-i18n-openclash-zh-cn" ]; then
+        cp -rf OpenClash-temp/luci-i18n-openclash-zh-cn ./
+        echo "✅ Installed luci-i18n-openclash-zh-cn package"
+    fi
+
+    # Clean up temporary directory
+    rm -rf OpenClash-temp
+    echo "✅ OpenClash packages installed successfully"
+else
+    echo "❌ Failed to clone OpenClash repository"
+fi
 
 # Copy local packages to the package directory
 echo " "

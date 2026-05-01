@@ -32,7 +32,11 @@ env:
   KEEP_RELEASES: 20
   KEEP_RELEASE_MARKER: "[keep-release]"
   CCACHE_DIR: /mnt/openwrt/ccache
-  CCACHE_MAXSIZE: 5G
+  CCACHE_MAXSIZE: 3G
+  CCACHE_HARDLINK: true
+  CCACHE_COMPRESS: true
+  CCACHE_COMPRESSLEVEL: 9
+  CCACHE_SLOPPINESS: "include_file_mtime,include_file_ctime,time_macros"
   TZ: Asia/Shanghai
 
 jobs:
@@ -114,18 +118,30 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-openwrt-${{ env.REPO_BRANCH }}-ccache-v2-
 
-      - name: Setup ccache
+      - name: Run build optimization
+        working-directory: ./openwrt
         run: |
-          mkdir -p "$CCACHE_DIR"
-          ccache -M "$CCACHE_MAXSIZE"
-          echo "ccache dir: $CCACHE_DIR"
-          ccache -s
+          echo "=== Running build optimization ==="
+          bash ../scripts/build-optimization.sh
+          echo "✅ Build optimization completed"
 
       - name: Update & Install feeds
         working-directory: ./openwrt
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a -f
+
+      - name: Optimize static libraries
+        working-directory: ./openwrt
+        run: |
+          echo "=== Optimizing static library configuration ==="
+          # Disable static library building where possible to reduce firmware size
+          sed -i 's/CONFIG_STATIC=y/CONFIG_STATIC=n/' .config || true
+          # Ensure shared libraries are preferred
+          sed -i 's/CONFIG_BUILD_SHARED=y/CONFIG_BUILD_SHARED=y/' .config || true
+          # Remove unnecessary static libraries from package feeds
+          find feeds/packages -name "*.a" -delete 2>/dev/null || true
+          echo "✅ Static library optimization completed"
 
       - name: Install third-party packages (homeproxy, passwall)
         working-directory: ./openwrt/package
@@ -167,6 +183,12 @@ jobs:
           make download -j4 V=s
           # Remove small incomplete files <1KB
           find dl -size -1024c -delete
+          # Clean up unnecessary files to save space
+          find dl -name "*.src.tar.gz" -delete 2>/dev/null || true
+          find dl -name "*.git" -type d -exec rm -rf {} + 2>/dev/null || true
+          # Clean package cache to prevent bloat
+          rm -rf /var/lib/apt/lists/*
+          rm -rf /var/cache/apt/archives/*.deb
 
       - name: Compile OpenWrt firmware
         id: compile
@@ -174,18 +196,44 @@ jobs:
           cd openwrt
           echo "Disk usage before compile:"
           df -h
+
+          # Dynamic job calculation based on available memory
+          AVAILABLE_MEM=$(free -g | awk '/^Mem:/{print $2}')
+          if [ "$AVAILABLE_MEM" -lt 8 ]; then
+            JOBS=2
+          elif [ "$AVAILABLE_MEM" -lt 16 ]; then
+            JOBS=4
+          else
+            JOBS=$(nproc)
+          fi
+          echo "Using $JOBS parallel jobs based on $AVAILABLE_MEM GB available memory"
+
+          # Clean up before build to ensure enough space
+          rm -rf /tmp/* /var/tmp/*
+          find . -name "*.o" -delete 2>/dev/null || true
+
           if [[ "${{ inputs.log_switch }}" == "true" ]]; then
             make -j1 V=s || {
-              echo "Compile failed, disk usage diagnostics:"
+              echo "❌ Compile failed with verbose logging"
+              echo "Disk usage diagnostics:"
               df -h
               du -h -d1 . | sort -h | tail -n 30
+              echo "Memory diagnostics:"
+              free -h
+              echo "ccache statistics:"
+              ccache -s || true
               exit 1
             }
           else
-            make -j$(nproc) || {
-              echo "Compile failed, disk usage diagnostics:"
+            make -j$JOBS || {
+              echo "❌ Compile failed with $JOBS parallel jobs"
+              echo "Disk usage diagnostics:"
               df -h
               du -h -d1 . | sort -h | tail -n 30
+              echo "Memory diagnostics:"
+              free -h
+              echo "ccache statistics:"
+              ccache -s || true
               exit 1
             }
           fi
@@ -195,6 +243,7 @@ jobs:
           fi
           echo "FILE_DATE=_$(date +%Y%m%d%H%M)" >> "$GITHUB_ENV"
           echo "status=success" >> $GITHUB_OUTPUT
+          echo "✅ Compile completed successfully"
           echo "ccache stats (env CCACHE_DIR=$CCACHE_DIR):"
           ccache -s || true
 
