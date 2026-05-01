@@ -37,13 +37,14 @@ optimize_ccache() {
     echo "🔧 Optimizing ccache configuration..."
     mkdir -p "$CCACHE_DIR"
 
-    # Set ccache options
+    # Set ccache options (using only basic options compatible with older versions)
     ccache -M "$MAX_CCACHE_SIZE"
-    # Use environment variable for ccache hardlink (compatible with older versions)
+    
+    # Use environment variables for compatibility with older ccache versions
     export CCACHE_HARDLINK=true
-    ccache --set-config=compress=true
-    ccache --set-config=compress_level=9
-    ccache --set-config=sloppiness="include_file_mtime,include_file_ctime,time_macros"
+    export CCACHE_COMPRESS=true
+    export CCACHE_COMPRESSLEVEL=9
+    export CCACHE_SLOPPINESS="include_file_mtime,include_file_ctime,time_macros"
 
     echo "✅ ccache configured with max size: $MAX_CCACHE_SIZE"
 }
