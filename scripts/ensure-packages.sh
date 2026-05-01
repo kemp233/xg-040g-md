@@ -91,17 +91,17 @@ verify_packages() {
     
     # Check package groups (all optional for flexibility)
     
-    # CUPS packages (optional)
-    check_package_group "CUPS" cups cups-server cups-client libcups cups-filters
+    # CUPS packages (optional - some may not exist in openwrt-main)
+    check_package_group "CUPS" cups libcups libcupsimage cups-bsd
     
-    # OpenClash packages (optional)
-    check_package_group "OpenClash" openclash luci-app-openclash
+    # OpenClash packages (optional - not available in openwrt-main)
+    # check_package_group "OpenClash" openclash luci-app-openclash
     
-    # LuCI base packages (optional - try multiple names)
+    # LuCI base packages (optional - try multiple names, some may not exist)
     log_info "Checking LuCI base packages..."
     local found_luci=0
     
-    for pkg in luci luci-ssl luci-base luci-mod-admin-full; do
+    for pkg in luci luci-ssl; do
         if check_package "$pkg"; then
             found_luci=1
         fi
