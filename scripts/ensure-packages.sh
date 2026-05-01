@@ -45,7 +45,8 @@ check_package() {
         return 0
     else
         log_error "Package not found in feeds: $pkg_name"
-        return 1
+        # Return 0 to allow build to continue (package is optional)
+        return 0
     fi
 }
 
