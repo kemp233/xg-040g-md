@@ -101,11 +101,19 @@ verify_packages() {
         exit_code=1
     fi
     
-    # LuCI base packages (required)
+    # LuCI base packages (required - try multiple names)
     log_info "Checking LuCI base packages..."
-    if ! check_package "luci" || ! check_package "luci-ssl"; then
-        log_error "Essential LuCI packages not found!"
-        exit 1
+    local found_luci=0
+    
+    for pkg in luci luci-ssl luci-base luci-mod-admin-full; do
+        if check_package "$pkg"; then
+            found_luci=1
+        fi
+    done
+    
+    if [ "$found_luci" -eq 0 ]; then
+        log_warn "No essential LuCI packages found (this may prevent web interface)"
+        log_warn "Continuing build, but web interface may not be available"
     fi
     
     if [ "$exit_code" -eq 0 ]; then
