@@ -1,62 +1,123 @@
 #!/bin/bash
-set -e
+# OpenWRT Package Verification Script
+# Ensures required packages are available in feeds before building
 
-echo "=== Ensuring Required Packages ==="
+set -euo pipefail
 
-# 首先更新feeds
-echo "🔄 Updating feeds..."
-./scripts/feeds update -a
-./scripts/feeds install -a -f
+# Script metadata
+SCRIPT_NAME="$(basename "$0")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# 检查关键包是否存在（支持多种名称）
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Package checking function with detailed error reporting
 check_package() {
-    local pkg=$1
-    if ! ./scripts/feeds list | grep -q "^${pkg}$"; then
-        echo "❌ Package ${pkg} not found in feeds"
+    local pkg_name="$1"
+    local feed_list_output
+    
+    # Validate package name format (security check)
+    if [[ ! "$pkg_name" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        log_error "Invalid package name format: $pkg_name"
         return 1
     fi
-    echo "✅ Package ${pkg} found"
+    
+    # Check if package exists in feeds
+    if feed_list_output=$(./scripts/feeds list 2>&1 | grep -m1 "^${pkg_name}$"); then
+        log_info "Package found: $pkg_name"
+        return 0
+    else
+        log_error "Package not found in feeds: $pkg_name"
+        return 1
+    fi
+}
+
+# Check for required packages with fallback names
+check_package_group() {
+    local group_name="$1"
+    shift
+    local package_names=("$@")
+    local found=0
+    
+    log_info "Checking $group_name packages..."
+    
+    for pkg in "${package_names[@]}"; do
+        if check_package "$pkg"; then
+            found=1
+        fi
+    done
+    
+    if [ "$found" -eq 0 ]; then
+        log_warn "No $group_name packages found in feeds (may be expected in some branches)"
+        return 1
+    fi
+    
     return 0
 }
 
-# 检查CUPS相关包（尝试多种名称）
-echo "🔍 Checking CUPS packages..."
-found_cups=0
-for pkg in cups cups-server cups-client libcups cups-filters; do
-    if check_package "$pkg"; then
-        found_cups=1
+# Main verification function
+verify_packages() {
+    log_info "Starting package verification..."
+    
+    # Update feeds first
+    log_info "Updating feeds..."
+    if ! ./scripts/feeds update -a > /dev/null 2>&1; then
+        log_error "Failed to update feeds"
+        exit 1
     fi
-done
-
-if [ "$found_cups" -eq 0 ]; then
-    echo "⚠️  No CUPS packages found in feeds, but this may be expected in some branches"
-fi
-
-# 检查OpenClash相关包（尝试多种名称）
-echo "🔍 Checking OpenClash packages..."
-found_openclash=0
-for pkg in openclash luci-app-openclash; do
-    if check_package "$pkg"; then
-        found_openclash=1
+    
+    if ! ./scripts/feeds install -a -f > /dev/null 2>&1; then
+        log_error "Failed to install feeds"
+        exit 1
     fi
-done
-
-if [ "$found_openclash" -eq 0 ]; then
-    echo "⚠️  No OpenClash packages found in feeds, but this may be expected in some branches"
-fi
-
-# 检查LuCI基础包（必需）
-echo "🔍 Checking LuCI base packages..."
-found_luci=0
-for pkg in luci luci-ssl luci-base; do
-    if check_package "$pkg"; then
-        found_luci=1
+    
+    # Check package groups
+    local exit_code=0
+    
+    # CUPS packages (optional)
+    if ! check_package_group "CUPS" cups cups-server cups-client libcups cups-filters; then
+        exit_code=1
     fi
-done
+    
+    # OpenClash packages (optional)
+    if ! check_package_group "OpenClash" openclash luci-app-openclash; then
+        exit_code=1
+    fi
+    
+    # LuCI base packages (required)
+    log_info "Checking LuCI base packages..."
+    if ! check_package "luci" || ! check_package "luci-ssl"; then
+        log_error "Essential LuCI packages not found!"
+        exit 1
+    fi
+    
+    if [ "$exit_code" -eq 0 ]; then
+        log_info "Package verification completed successfully"
+    else
+        log_warn "Package verification completed with warnings"
+    fi
+    
+    return $exit_code
+}
 
-if [ "$found_luci" -eq 0 ]; then
-    echo "❌ Essential LuCI packages not found!"
-    exit 1
+# Execute main function
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    verify_packages
 fi
-
-echo "=== Package verification completed ==="
