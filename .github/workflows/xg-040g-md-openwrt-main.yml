@@ -124,6 +124,46 @@ jobs:
           cd openwrt && make defconfig
           [ -e .config ] && cp .config defconfig-final.config
 
+      - name: Validate kernel config
+        run: |
+          OPENWRT_DIR="$PWD/openwrt"
+          KERNEL_CONFIG_PATH="$OPENWRT_DIR/build_dir/target-aarch64_cortex-a53_musl/linux-airoha_an7581/linux-6.12.85/.config"
+          
+          echo "=== Kernel Config Validation ==="
+          echo "Expected config path: $KERNEL_CONFIG_PATH"
+          
+          if [ ! -f "$KERNEL_CONFIG_PATH" ]; then
+            echo "❌ Kernel config missing! Regenerating..."
+            cd $OPENWRT_DIR && make defconfig
+            echo "Kernel config regenerated"
+          else
+            echo "✅ Kernel config exists"
+          fi
+          
+          echo "Config files in build_dir:"
+          find $OPENWRT_DIR/build_dir -name ".config" 2>/dev/null | head -10 || echo "No config files found"
+
+      - name: Build and verify toolchain
+        working-directory: ./openwrt
+        run: |
+          echo "=== Building and Verifying Toolchain ==="
+          
+          # Build toolchain with reduced parallelism to avoid race conditions
+          make toolchain/install -j2 || {
+            echo "❌ Toolchain build failed! Retrying with -j1..."
+            make toolchain/clean
+            make toolchain/install -j1
+          }
+          
+          # Verify toolchain
+          if command -v aarch64-openwrt-linux-musl-gcc &> /dev/null; then
+            echo "✅ Toolchain installed successfully"
+            aarch64-openwrt-linux-musl-gcc --version
+          else
+            echo "❌ Toolchain missing! Critical error."
+            exit 1
+          fi
+
       - name: Ensure Required Packages
         working-directory: ./openwrt
         run: |
@@ -152,7 +192,32 @@ jobs:
       - name: Download packages
         working-directory: ./openwrt
         run: |
-          make download -j4 V=s
+          echo "=== Downloading packages with validation ==="
+          
+          # Test kernel config before download
+          KERNEL_CONFIG="$PWD/build_dir/target-aarch64_cortex-a53_musl/linux-airoha_an7581/linux-6.12.85/.config"
+          if [ ! -f "$KERNEL_CONFIG" ]; then
+            echo "❌ Kernel config missing before download! Regenerating..."
+            make defconfig
+          fi
+          
+          # Download with error handling
+          if ! make download -j2 V=s; then
+            echo "❌ Download failed! Checking kernel config..."
+            if [ ! -f "$KERNEL_CONFIG" ]; then
+              echo "❌ Kernel config still missing!"
+              echo "Available files in build_dir:"
+              find build_dir -type f -name "*.config" 2>/dev/null | head -5 || echo "No config files"
+              exit 1
+            fi
+            # Retry with -j1
+            echo "Retrying download with -j1..."
+            make download -j1 V=s || {
+              echo "❌ Download failed again!"
+              exit 1
+            }
+          fi
+          
           # Remove small incomplete files <1KB
           find dl -size -1024c -delete
           # Clean up unnecessary files to save space
