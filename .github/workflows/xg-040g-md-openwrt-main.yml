@@ -143,6 +143,38 @@ jobs:
           echo "Config files in build_dir:"
           find $OPENWRT_DIR/build_dir -name ".config" 2>/dev/null | head -10 || echo "No config files found"
 
+      - name: Install additional dependencies
+        run: |
+          echo "=== Installing additional dependencies ==="
+          sudo apt update
+          sudo apt install -y \
+            libruby3.0 libpam0g libtirpc3 libev4 liblzma5 libzstd1 \
+            libnetsnmp35 libssl3 liblua5.3-0 libreadline8 \
+            libruby3.0-dev libpam0g-dev libtirpc-dev libev-dev liblzma-dev libzstd-dev \
+            libnetsnmp-dev libssl-dev liblua5.3-dev libreadline-dev || echo "Some dependencies may not be available, continuing..."
+
+      - name: Debug toolchain environment
+        working-directory: ./openwrt
+        run: |
+          echo "=== Debugging Toolchain Environment ==="
+          echo "Working directory: $PWD"
+          echo "PATH: $PATH"
+          echo "HOST: $(uname -m)"
+          echo "Target: aarch64-openwrt-linux-musl"
+          
+          # Check toolchain directory structure
+          echo "Staging dir contents:"
+          ls -la staging_dir/ 2>/dev/null || echo "staging_dir not found"
+          
+          if [ -d "staging_dir/host" ]; then
+            echo "Host toolchain dir:"
+            ls -la staging_dir/host/ 2>/dev/null || echo "host dir not found"
+            if [ -d "staging_dir/host/bin" ]; then
+              echo "Host bin dir:"
+              ls -la staging_dir/host/bin/ 2>/dev/null || echo "host/bin not found"
+            fi
+          fi
+
       - name: Build and verify toolchain
         working-directory: ./openwrt
         run: |
@@ -155,12 +187,31 @@ jobs:
             make toolchain/install -j1
           }
           
-          # Verify toolchain
-          if command -v aarch64-openwrt-linux-musl-gcc &> /dev/null; then
-            echo "✅ Toolchain installed successfully"
-            aarch64-openwrt-linux-musl-gcc --version
+          # Source the environment to ensure paths are set
+          if [ -f "$PWD/staging_dir/host/bin/env" ]; then
+            source $PWD/staging_dir/host/bin/env
+            echo "✅ Environment sourced"
           else
-            echo "❌ Toolchain missing! Critical error."
+            echo "⚠️  Environment script not found, continuing..."
+          fi
+          
+          # Verify toolchain with better path detection
+          TOOLCHAIN_PATH="$PWD/staging_dir/host/bin"
+          echo "Toolchain path: $TOOLCHAIN_PATH"
+          echo "Contents of toolchain path:"
+          ls -la $TOOLCHAIN_PATH/ 2>/dev/null || echo "Toolchain path not found"
+          
+          # Check for cross-compiler with full path
+          CROSS_CC="$TOOLCHAIN_PATH/aarch64-openwrt-linux-musl-gcc"
+          if [ -f "$CROSS_CC" ]; then
+            echo "✅ Toolchain installed successfully at $CROSS_CC"
+            $CROSS_CC --version
+          else
+            echo "❌ Toolchain missing at expected path: $CROSS_CC"
+            echo "Looking for aarch64 compiler in PATH..."
+            find $TOOLCHAIN_PATH -name "*aarch64*" -type f 2>/dev/null || echo "No aarch64 compiler found in toolchain path"
+            # Try to find any cross-compiler
+            find /usr -name "*aarch64*" -type f 2>/dev/null | head -5 || echo "No aarch64 compiler anywhere"
             exit 1
           fi
 
