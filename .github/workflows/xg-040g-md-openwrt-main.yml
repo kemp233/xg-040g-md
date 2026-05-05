@@ -361,6 +361,32 @@ jobs:
             openwrt/defconfig-final.config
             openwrt/feeds.conf.default
 
+      - name: Clean up before compile
+        working-directory: ./openwrt
+        run: |
+          echo "=== Cleaning up before compile ==="
+          echo "Disk usage before cleanup: $(df -h . | awk 'NR==2{print $4}')"
+          
+          # 清理apt缓存
+          sudo apt-get clean -y
+          sudo rm -rf /var/lib/apt/lists/*
+          
+          # 清理临时文件
+          sudo rm -rf /tmp/* /var/tmp/*
+          
+          # 清理git对象
+          find . -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
+          
+          # 清理下载的源码包
+          find dl -name "*.src.tar.gz" -delete 2>/dev/null || true
+          
+          # 清理旧的构建产物
+          find build_dir -name "*.o" -delete 2>/dev/null || true
+          find build_dir -name "*.a" -delete 2>/dev/null || true
+          
+          echo "Disk usage after cleanup: $(df -h . | awk 'NR==2{print $4}')"
+          echo "Memory available: $(free -h | awk '/^Mem:/{print $2}')GB"
+
       - name: Download packages
         working-directory: ./openwrt
         run: |
@@ -399,50 +425,133 @@ jobs:
           rm -rf /var/lib/apt/lists/*
           rm -rf /var/cache/apt/archives/*.deb
 
+      - name: Aggressive disk cleanup
+        working-directory: ./openwrt
+        run: |
+          echo "=== Aggressive Disk Cleanup ==="
+          echo "Disk usage before aggressive cleanup:"
+          df -h
+          
+          # Remove unnecessary build artifacts
+          find . -type f -name "*.o" -delete 2>/dev/null || true
+          find . -type f -name "*.a" -delete 2>/dev/null || true
+          find . -type f -name "*.ko" -delete 2>/dev/null || true
+          find . -type f -name "*.so" -delete 2>/dev/null || true
+          
+          # Clean up large temporary files
+          find . -type f -size +100M -delete 2>/dev/null || true
+          
+          # Clean package caches
+          find . -type d -name "cache" -exec rm -rf {} + 2>/dev/null || true
+          find . -type d -name "tmp" -exec rm -rf {} + 2>/dev/null || true
+          
+          # Clean downloaded source packages (keep only recent)
+          find dl -type f -name "*.tar.gz" -mtime +1 -delete 2>/dev/null || true
+          find dl -type f -name "*.zip" -mtime +1 -delete 2>/dev/null || true
+          
+          # Clean git repositories
+          find . -type d -name ".git" -exec rm -rf {} + 2>/dev/null || true
+          
+          # Clean apt and dpkg caches
+          rm -rf /var/lib/apt/lists/*
+          rm -rf /var/cache/apt/archives/*
+          rm -rf /var/cache/debconf/*
+          apt-get clean -y || true
+          
+          echo "Disk usage after aggressive cleanup:"
+          df -h
+          echo "Memory available:"
+          free -h
+
       - name: Compile OpenWrt firmware
         id: compile
         run: |
           cd openwrt
+          echo "=== Compile OpenWrt Firmware ==="
           echo "Disk usage before compile:"
           df -h
 
-          # Dynamic job calculation based on available memory
+          # Enhanced dynamic job calculation with safety margin
           AVAILABLE_MEM=$(free -g | awk '/^Mem:/{print $2}')
-          if [ "$AVAILABLE_MEM" -lt 8 ]; then
+          AVAILABLE_DISK=$(df -BG . | awk 'NR==2{print $4}' | sed 's/G//')
+          
+          echo "Available memory: ${AVAILABLE_MEM}GB"
+          echo "Available disk: ${AVAILABLE_DISK}GB"
+          
+          # Conservative job calculation to prevent OOM
+          if [ "$AVAILABLE_MEM" -lt 4 ]; then
+            JOBS=1
+            echo "⚠️  Low memory detected, using single job"
+          elif [ "$AVAILABLE_MEM" -lt 8 ]; then
             JOBS=2
-          elif [ "$AVAILABLE_MEM" -lt 16 ]; then
-            JOBS=4
+            echo "⚠️  Moderate memory, using 2 jobs"
+          elif [ "$AVAILABLE_MEM" -lt 12 ]; then
+            JOBS=3
+            echo "✅  Good memory, using 3 jobs"
           else
-            JOBS=$(nproc)
+            JOBS=4
+            echo "✅  Ample memory, using 4 jobs"
           fi
-          echo "Using $JOBS parallel jobs based on $AVAILABLE_MEM GB available memory"
+          
+          # Further reduce jobs if disk space is limited
+          if [ "$AVAILABLE_DISK" -lt 10 ]; then
+            JOBS=1
+            echo "⚠️  Low disk space, reducing to single job"
+          fi
+          
+          echo "Using $JOBS parallel jobs based on available resources"
 
-          # Clean up before build to ensure enough space
+          # Enhanced cleanup before build
+          echo "=== Enhanced cleanup ==="
           rm -rf /tmp/* /var/tmp/*
           find . -name "*.o" -delete 2>/dev/null || true
+          find . -name "*.a" -delete 2>/dev/null || true
+          find . -name "*.ko" -delete 2>/dev/null || true
+          
+          # Clean package cache aggressively
+          rm -rf /var/lib/apt/lists/*
+          rm -rf /var/cache/apt/archives/*
+          apt-get clean -y || true
+          
+          # Clean git repositories in feeds
+          find feeds -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
+          
+          echo "Disk usage after enhanced cleanup:"
+          df -h
 
+          # Compile with enhanced error handling and monitoring
           if [[ "${{ inputs.log_switch }}" == "true" ]]; then
-            make -j1 V=s || {
+            echo "=== Compiling with verbose logging ==="
+            make -j1 V=s 2>&1 | tee compile.log || {
               echo "❌ Compile failed with verbose logging"
-              echo "Disk usage diagnostics:"
-              df -h
-              du -h -d1 . | sort -h | tail -n 30
-              echo "Memory diagnostics:"
+              echo "=== Error summary ==="
+              grep -i "error\|fatal\|failed\|out of memory" compile.log | tail -30
+              echo "=== Last 50 lines ==="
+              tail -50 compile.log
+              echo "=== Resource diagnostics ==="
+              echo "Memory usage:"
               free -h
-              echo "ccache statistics:"
-              ccache -s || true
+              echo "Disk usage:"
+              df -h
+              echo "Largest directories:"
+              du -h -d2 . | sort -h | tail -20
               exit 1
             }
           else
-            make -j$JOBS || {
+            echo "=== Compiling with $JOBS parallel jobs ==="
+            make -j$JOBS 2>&1 | tee compile.log || {
               echo "❌ Compile failed with $JOBS parallel jobs"
-              echo "Disk usage diagnostics:"
-              df -h
-              du -h -d1 . | sort -h | tail -n 30
-              echo "Memory diagnostics:"
+              echo "=== Error summary ==="
+              grep -i "error\|fatal\|failed\|out of memory" compile.log | tail -30
+              echo "=== Last 50 lines ==="
+              tail -50 compile.log
+              echo "=== Resource diagnostics ==="
+              echo "Memory usage:"
               free -h
-              echo "ccache statistics:"
-              ccache -s || true
+              echo "Disk usage:"
+              df -h
+              echo "Largest directories:"
+              du -h -d2 . | sort -h | tail -20
               exit 1
             }
           fi
