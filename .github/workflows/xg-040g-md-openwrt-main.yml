@@ -235,6 +235,55 @@ jobs:
           
           echo "✅ Toolchain build completed successfully"
 
+      - name: Verify toolchain installation
+        working-directory: ./openwrt
+        run: |
+          echo "=== Verifying toolchain installation ==="
+          
+          # 检查工具链构建日志
+          if [ -f "toolchain_build.log" ]; then
+            echo "Toolchain build log exists"
+            grep -i "install\|copy\|cp " toolchain_build.log | tail -20
+          fi
+          
+          # 检查所有可能的安装路径
+          echo "=== Checking all possible installation paths ==="
+          find . -type d -name "bin" 2>/dev/null | grep -E "staging|host|toolchain" | head -10
+          
+          # 检查所有可能的交叉编译器路径
+          echo "=== Checking all possible cross-compiler paths ==="
+          find . -type f -name "*gcc*" 2>/dev/null | grep -E "aarch64|openwrt" | head -20
+          
+          # 检查工具链配置
+          echo "=== Checking toolchain configuration ==="
+          if [ -f ".config" ]; then
+            grep -i "toolchain\|cross.*compiler\|ARCH" .config | head -20
+          fi
+
+      - name: Setup toolchain environment
+        working-directory: ./openwrt
+        run: |
+          echo "=== Setting up toolchain environment ==="
+          
+          # 检查并source环境脚本
+          if [ -f "staging_dir/host/bin/env" ]; then
+            echo "Sourcing environment script"
+            source staging_dir/host/bin/env
+          fi
+          
+          # 添加工具链路径到PATH
+          if [ -d "staging_dir/host/bin" ]; then
+            export PATH="$PWD/staging_dir/host/bin:$PATH"
+            echo "Added staging_dir/host/bin to PATH"
+          fi
+          
+          # 检查交叉编译器
+          echo "=== Checking cross-compiler availability ==="
+          which aarch64-openwrt-linux-musl-gcc || echo "Cross-compiler not found in PATH"
+          
+          # 显示所有可能的交叉编译器
+          find . -type f -executable -name "*aarch64*" 2>/dev/null | head -20
+
       - name: Detailed toolchain diagnostics
         working-directory: ./openwrt
         run: |
